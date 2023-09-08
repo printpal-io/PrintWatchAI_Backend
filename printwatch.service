@@ -3,11 +3,11 @@ Description=PrintWatch AI
 After=multi-user.target
 
 [Service]
-WorkingDirectory=/home/pi/PrintWatchAI_Backend/
+WorkingDirectory=/home/pi/PrintWatchAI_Backend-raspberrypi/
 User=pi
 Type=simple
 Restart=always
-ExecStart=/usr/bin/python3 /home/pi/PrintWatchAI_Backend/main.py
+ExecStart=/usr/bin/python3 /home/pi/PrintWatchAI_Backend-raspberrypi/main.py
 
 [Install]
 WantedBy=multi-user.target
