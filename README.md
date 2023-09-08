@@ -88,14 +88,5 @@ Sep 08 23:35:28 orangepi python3[2237]: INFO:     Application startup complete.
 Sep 08 23:35:28 orangepi python3[2237]: INFO:     Uvicorn running on http://0.0.0.0:8989 (Press CTRL+C to quit)
 ```
 
-## Usage
-**Getting started with the plugin.**
-  1. Go to the plugin tab by navigating the side panel **Plugins -> PrintWatch AI**
-  2. Enable the plugin by clicking the **Enable Monitoring** button
-  3. In the PrintWatch AI plugin page, navigate to the **Settings** tab.
-  4. Obtain your API key and enter it into the **API key** field. Navigate to the [WebApp](https://app.printpal.io) and create a Free account:
-      1. Click 'Sign Up'
-      2. Enter desired credentials
-      3. Verify account with code sent via email
-      4. Log into the WebApp and navigate to **Account -> Settings** and copy the **API key** value. Paste this value into the **API key** field in the Duet plugin
-  5. For the Webcam URL input, enter the HTTP url at which the static image of the IP camera can be found. If using [Motion](https://plugins.duet3d.com/plugins/MotionWebcamServerPlugin.html) to handle the webcam streaming, this value will be: `http://<ip_address>:<port>/<camera_number>/current`. If configured using default settings with the Motion Plugin, this will be:  `http://localhost:8081/0/current`
+## Development
+Develop a custom integration with the AI backend by using the [REST API documentation](https://github.com/printpal-io/PrintWatchAI_Backend/wiki/REST-API) found on this repository.
