@@ -3,11 +3,11 @@ Description=PrintWatch AI
 After=multi-user.target
 
 [Service]
-WorkingDirectory=/home/orangepi/PrintWatchAI_Backend
+WorkingDirectory=/home/orangepi/PrintWatchAI_Backend-orangepi/
 User=orangepi
 Type=simple
 Restart=always
-ExecStart=/usr/bin/python3 /home/orangepi/PrintWatchAI_Backend/main.py
+ExecStart=/usr/bin/python3 /home/orangepi/PrintWatchAI_Backend-orangepi/main.py
 
 [Install]
 WantedBy=multi-user.target
