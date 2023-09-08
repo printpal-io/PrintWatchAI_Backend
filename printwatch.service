@@ -1,0 +1,13 @@
+[Unit]
+Description=PrintWatch AI
+After=multi-user.target
+
+[Service]
+WorkingDirectory=/home/orangepi/
+User=orangepi
+Type=simple
+Restart=always
+ExecStart=/usr/bin/python3 /home/orangepi/printwatch/main.py
+
+[Install]
+WantedBy=multi-user.target
