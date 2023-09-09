@@ -21,19 +21,23 @@ unzip raspberrypi.zip && rm raspberrypi.zip
 ```
 cd PrintWatchAI_Backend-raspberrypi
 ```
-5. Reload the systemctl daemo
+5. Install libraries
+```
+pip3 install -r requirements.txt
+```
+6. Reload the systemctl daemo
 ```
 sudo systemctl daemon-reload
 ```
-5. Enable the systemctl process for PrintWatch
+7. Enable the systemctl process for PrintWatch
 ```
 sudo systemctl enable /home/pi/PrintWatchAI_Backend-raspberry/printwatch.service
 ```
-6. Start the systemctl process for PrintWatch
+8. Start the systemctl process for PrintWatch
 ```
 sudo systemctl start printwatch.service
 ```
-7. Validate the printwatch process is running
+9. Validate the printwatch process is running
 ```
 sudo journalctl -u printwatch
 ```
@@ -63,19 +67,23 @@ unzip orangepi.zip && rm orangepi.zip
 ```
 cd PrintWatchAI_Backend-orangepi
 ```
-5. Reload the systemctl daemo
+5. Install libraries
+```
+pip3 install -r requirements.txt
+```
+6. Reload the systemctl daemo
 ```
 sudo systemctl daemon-reload
 ```
-5. Enable the systemctl process for PrintWatch
+7. Enable the systemctl process for PrintWatch
 ```
 sudo systemctl enable /home/orangepi/PrintWatchAI_Backend-orangepi/printwatch.service
 ```
-6. Start the systemctl process for PrintWatch
+8. Start the systemctl process for PrintWatch
 ```
 sudo systemctl start printwatch.service
 ```
-7. Validate the printwatch process is running
+9. Validate the printwatch process is running
 ```
 sudo journalctl -u printwatch
 ```
@@ -106,7 +114,11 @@ unzip orangepi.zip && rm orangepi.zip
 ```
 cd PrintWatchAI_Backend-orangepi
 ```
-5. Modify the `printwatch.service` file to match your configuration. Replace the `{user}` with your Linux devices corresponding name
+5. Install libraries
+```
+pip3 install -r requirements.txt
+```
+6. Modify the `printwatch.service` file to match your configuration. Replace the `{user}` with your Linux devices corresponding name
 ```
 [Unit]
 Description=PrintWatch AI
@@ -122,19 +134,19 @@ ExecStart=/usr/bin/python3 /home/{user}/PrintWatchAI_Backend-orangepi/main.py
 [Install]
 WantedBy=multi-user.target
 ```
-6. Reload the systemctl daemo
+7. Reload the systemctl daemo
 ```
 sudo systemctl daemon-reload
 ```
-7. Enable the systemctl process for PrintWatch
+8. Enable the systemctl process for PrintWatch
 ```
 sudo systemctl enable /home/{user}/PrintWatchAI_Backend-orangepi/printwatch.service
 ```
-8. Start the systemctl process for PrintWatch
+9. Start the systemctl process for PrintWatch
 ```
 sudo systemctl start printwatch.service
 ```
-9. Validate the printwatch process is running
+10. Validate the printwatch process is running
 ```
 sudo journalctl -u printwatch
 ```
