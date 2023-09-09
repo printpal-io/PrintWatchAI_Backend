@@ -31,7 +31,7 @@ sudo systemctl daemon-reload
 ```
 7. Enable the systemctl process for PrintWatch
 ```
-sudo systemctl enable /home/pi/PrintWatchAI_Backend-raspberry/printwatch.service
+sudo systemctl enable /home/pi/PrintWatchAI_Backend-raspberrypi/printwatch.service
 ```
 8. Start the systemctl process for PrintWatch
 ```
