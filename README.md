@@ -17,7 +17,7 @@ wget https://github.com/printpal-io/PrintWatchAI_Backend/archive/refs/tags/raspb
 ```
 unzip raspberrypi.zip && rm raspberrypi.zip
 ```
-4.Change directories
+4. Change directories
 ```
 cd PrintWatchAI_Backend-raspberrypi
 ```
@@ -63,7 +63,7 @@ wget https://github.com/printpal-io/PrintWatchAI_Backend/archive/refs/tags/orang
 ```
 unzip orangepi.zip && rm orangepi.zip
 ```
-4.Change directories
+4. Change directories
 ```
 cd PrintWatchAI_Backend-orangepi
 ```
@@ -110,7 +110,7 @@ wget https://github.com/printpal-io/PrintWatchAI_Backend/archive/refs/tags/orang
 ```
 unzip orangepi.zip && rm orangepi.zip
 ```
-4.Change directories
+4. Change directories
 ```
 cd PrintWatchAI_Backend-orangepi
 ```
