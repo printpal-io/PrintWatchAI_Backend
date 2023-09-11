@@ -50,6 +50,38 @@ Sep 08 23:35:28 pi python3[2237]: INFO:     Application startup complete.
 Sep 08 23:35:28 pi python3[2237]: INFO:     Uvicorn running on http://0.0.0.0:8989 (Press CTRL+C to quit)
 ```
 
+**Install the webcam streaming service:**
+
+1. SSH into the Raspberry Pi and navigate to the root directory of the user
+```
+cd /home/pi
+```
+2. Pull uStreamer
+```
+git clone --depth=1 https://github.com/pikvm/ustreamer
+```
+3. Change directories
+```
+cd ustreamer
+```
+4. Install dependencies
+```
+sudo apt install libevent-dev libjpeg9-dev libbsd-dev libasound2-dev libspeex-dev libspeexdsp-dev libopus-dev
+```
+5. Install
+```
+sudo make install
+```
+6. Make uStreamer user
+```
+sudo useradd -r ustreamer
+sudo usermod -a -G video ustreamer
+```
+7. Enable and start the systemctl process for uStreamer
+```
+sudo systemctl enable /home/orangepi/PrintWatchAI_Backend-raspberrypi/ustreamer.service
+sudo systemctl start ustreamer.service
+```
 ### Orange Pi
 1. SSH into the Orange Pi and navigate to the root directory of the user
 ```
