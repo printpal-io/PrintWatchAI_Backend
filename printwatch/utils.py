@@ -474,15 +474,15 @@ class LoopHandler:
 
 
                     # Get the DUET print state here
-                    print_stats = {}
-                    if self.settings.get("test_mode") and not self.rep_rap_api.parse_state_response(duet_state) == 'P':
-                        print_stats = {
-                            "state" : 0,
-                            "printTime" : 550,
-                            "printTimeLeft" : 1,
-                            "progress" : 99.9,
-                            "job_name" : "temp-job-name.stl"
-                        }
+                    #print_stats = {}
+                    #if self.settings.get("test_mode") and not self.rep_rap_api.parse_state_response(duet_state) == 'P':
+                    print_stats = {
+                        "state" : 0,
+                        "printTime" : 550,
+                        "printTimeLeft" : 1,
+                        "progress" : 99.9,
+                        "job_name" : "temp-job-name.stl"
+                    }
 
                     response = await _async_infer(
                                         image=b64encode(frame).decode('utf8'),
@@ -498,6 +498,8 @@ class LoopHandler:
                                     levels=response.get("levels")
                             )
                         await self._handle_action()
+                    else:
+                        print('Response code not 200: {}'.format(response))
                 else:
                     print("Issue with camera")
         except Exception as e:
