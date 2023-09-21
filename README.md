@@ -2,7 +2,22 @@
 Backend component for PrintWatchAI Plugin for Duet This backend monitors the webcam stream on any RepRapFirmware printer for spaghetti type defects. It can work with any camera that is accessible via an IP address/HTTP endpoint.
 
 ## Installation
-This Backend component can be installed on any Linux device. Please follow the steps below for your device:
+This Backend component can be installed on any Linux device. Ensure that the latest version of pip is installed on your device with the following commands:
+```
+pip install --upgrade pip
+```
+
+In some cases you will need to specify pip3:
+```
+pip3 install --upgrade pip
+```
+
+In some cases, you will need to upgrade using python:
+```
+python -m pip install --upgrade pip
+```
+
+Please follow the steps below for your device:
 
 ### Raspberry Pi
 1. SSH into the Raspberry Pi and navigate to the root directory of the user
