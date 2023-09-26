@@ -364,11 +364,11 @@ class LoopHandler:
         if self._actionsSent > 10: # May want to change this for the show
             return False
         if type == 'notify':
-            if self.last_n_notifications_interval() < 100: #and self.retrigger_check():
-                return True if len(self._notificationsSent) < 1000 and time() - self._lastNotification > self.notifyTimer else False
+            if self.last_n_notifications_interval() < 2 and self.retrigger_check():
+                return True if len(self._notificationsSent) < 10 and time() - self._lastNotification > self.notifyTimer else False
             return False
         elif type == 'action':
-            return True if self._actionsSent < 100 and time() - self._lastAction > self.notifyTimer else False
+            return True if self._actionsSent < 10 and time() - self._lastAction > self.notifyTimer else False
 
     def last_n_notifications_interval(self, interval : int = 4 * 60 * 60) -> int:
         '''
@@ -411,8 +411,8 @@ class LoopHandler:
             if num_below_threshold >= int(self.settings.get("buffer_length") * self.settings.get("buffer_percent")):
                 self.retrigger_valid = True
                 return True
-            return False
-        return True
+            return self.retrigger_valid
+        return self.retrigger_valid
 
 
 
