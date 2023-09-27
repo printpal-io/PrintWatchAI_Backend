@@ -70,6 +70,7 @@ class PrintFarmPro:
         self.router.add_api_route('/machine/printwatch/preview', self._get_preview, methods=["GET"])
         self.router.add_api_route('/machine/printwatch/monitor_init', self._add_monitor, methods=["GET"])
         self.router.add_api_route('/machine/printwatch/monitor_off', self._kill_monitor, methods=["GET"])
+        self.router.add_api_route('/machine/printwatch/heartbeat', self._heartbeat, methods=["GET"])
         self._init_api()
 
         self.aio = get_or_create_eventloop()
@@ -145,6 +146,13 @@ class PrintFarmPro:
         self._on_settings_change()
         return True
 
+    def _kill_runner(self):
+        self.runner.cancel()
+        self.runner = None
+        self.settings["monitoring_on"] = False
+        self._save_settings()
+        self._on_settings_change()
+
     async def _get_monitor(self):
         if self.runner is None:
             return {'status' : 8001, 'response' : 'No monitor active'}
@@ -168,6 +176,41 @@ class PrintFarmPro:
                         }
                     }
                 }
+
+    async def _heartbeat(self, api_key : str, test_mode : str, enable_monitor : str, duet_ip : str):
+        unsynced_variables = {
+            'duet_ip' : False,
+            'api_key' : False,
+            'test_mode' : False,
+            'monitoring_on' : False
+        }
+        if self.settings['duet_ip'] != duet_ip:
+            unsynced_variables['duet_ip'] = True
+            self.settings['duet_ip'] = duet_ip
+        if self.settings['api_key'] != duet_ip:
+            unsynced_variables['api_key'] = True
+            self.settings['api_key'] = api_key
+        if self.settings['monitoring_on'] != duet_ip:
+            unsynced_variables["monitoring_on"] = True
+            self.settings['monitoring_on'] = enable_monitor
+            if self.settings.get('monitoring_on'):
+                self._init_monitor()
+            else:
+                self._kill_runner()
+        if self.settings['test_mode'] != duet_ip:
+            unsynced_variables["test_mode"] = True
+            self.settings["test_mode"] = test_mode
+
+        if self.settings['monitoring_on'] and self.runner is None:
+            self._init_monitor()
+
+        if any(unsynced_variables.values()):
+            self._save_settings()
+            self._on_settings_change()
+            return {'status' : 8001, 'unsynced' : unsynced_variables}
+
+        return {'status' : 8000}
+
 
     async def _change_settings(self, settings : Settings):
         for key, value in settings.__dict__.items():
@@ -201,11 +244,7 @@ class PrintFarmPro:
 
     async def _kill_monitor(self):
         try:
-            self.runner.cancel()
-            self.runner = None
-            self.settings["monitoring_on"] = False
-            self._save_settings()
-            self._on_settings_change()
+            self._kill_runner()
             return {'status' : 8000}
         except Exception as e:
             return {'status' : 8001, 'response' : str(e)}
