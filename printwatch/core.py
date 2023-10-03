@@ -9,6 +9,8 @@ import uvicorn
 import os
 from pydantic import BaseModel
 from typing import Optional, Union
+from threading import Thread
+from contextlib import asynccontextmanager
 
 origins = [
     "*",
@@ -61,9 +63,14 @@ class PrintFarmPro:
         self.runner = None
         self._load_settings()
         self.printwatch = PrintWatchClient(settings=self.settings)
-        self.router = APIRouter()
+        self.aio = get_or_create_eventloop()
+
         if self.settings.get("monitoring_on"):
             self._init_monitor()
+        print('Running forever')
+
+
+        self.router = APIRouter()
         self.router.add_api_route('/machine/printwatch/set_settings', self._change_settings, methods=["POST"])
         self.router.add_api_route('/machine/printwatch/get_settings', self._get_settings, methods=["GET"])
         self.router.add_api_route('/machine/printwatch/monitor', self._get_monitor, methods=["GET"])
@@ -71,12 +78,12 @@ class PrintFarmPro:
         self.router.add_api_route('/machine/printwatch/monitor_init', self._add_monitor, methods=["GET"])
         self.router.add_api_route('/machine/printwatch/monitor_off', self._kill_monitor, methods=["GET"])
         self.router.add_api_route('/machine/printwatch/heartbeat', self._heartbeat, methods=["GET"])
-        self._init_api()
+        self._init_api(self.aio)
 
-        self.aio = get_or_create_eventloop()
-        self.aio.run_forever()
+        #self.aio = get_or_create_eventloop()
 
-    def _init_api(self):
+
+    def _init_api(self, loop):
         self.app = FastAPI()
         self.app.include_router(self.router)
         self.app.add_middleware(
@@ -86,7 +93,12 @@ class PrintFarmPro:
             allow_methods=["*"],
             allow_headers=["*"],
         )
-        uvicorn.run(self.app, host='0.0.0.0', port=8989)
+        cfg = uvicorn.Config(self.app, loop=loop, host='0.0.0.0', port=8989)
+        server = uvicorn.Server(cfg)
+        loop.run_until_complete(server.serve())
+        #uvicorn.run(self.app, host='0.0.0.0', port=8989)
+        print("API started")
+
 
     def _on_settings_change(self):
         if True:
@@ -95,6 +107,7 @@ class PrintFarmPro:
         if self.runner is not None:
             self.runner._loop_handler.resize_buffers()
             self.runner._loop_handler.camera.ip = self.settings.get("camera_ip")
+
     def _save_settings(self):
         with open("settings.json", "w") as f:
             ujson.dump(self.settings, f, indent=4)
@@ -130,6 +143,7 @@ class PrintFarmPro:
             with open("settings.json", "r") as f:
                 self.settings = ujson.load(f)
             self._on_settings_change()
+
 
     def _init_monitor(self, ticket_id : str = ''):
         if self.runner is not None:
@@ -177,29 +191,32 @@ class PrintFarmPro:
                     }
                 }
 
-    async def _heartbeat(self, api_key : str, test_mode : str, enable_monitor : str, duet_ip : str):
+    async def _heartbeat(self, api_key : str, test_mode : bool, enable_monitor : bool, duet_ip : str):
         unsynced_variables = {
             'duet_ip' : False,
             'api_key' : False,
             'test_mode' : False,
-            'enable_monitor' : False
+            'monitoring_on' : False
         }
         if self.settings['duet_ip'] != duet_ip:
-            unsynced_variables["duet_ip"] = True
-            self.settings["duet_ip"] = duet_ip
-        if self.settings['api_key'] != duet_ip:
-            unsynced_variables["api_key"] = True
-            self.settings["api_key"] = api_key
-        if self.settings['enable_monitor'] != duet_ip:
+            unsynced_variables['duet_ip'] = True
+            self.settings['duet_ip'] = duet_ip
+        if self.settings['api_key'] != api_key:
+            unsynced_variables['api_key'] = True
+            self.settings['api_key'] = api_key
+        if self.settings['monitoring_on'] != enable_monitor:
             unsynced_variables["monitoring_on"] = True
-            self.settings["monitoring_on"] = monitoring_on
-            if self.settings.get("monitoring_on"):
-                self._init_monitor()
-            else:
+            self.settings['monitoring_on'] = enable_monitor
+            if self.setting["monitoring_on"] is False:
                 self._kill_runner()
-        if self.settings['test_mode'] != duet_ip:
+        if self.settings['test_mode'] != test_mode:
             unsynced_variables["test_mode"] = True
             self.settings["test_mode"] = test_mode
+
+        print("MONITORING ON: {} | {} ".format(self.settings["monitoring_on"], self.runner))
+        if self.settings['monitoring_on'] and self.runner is None:
+            print("MONITOR IS NONE: {} | {}".format(self.settings['monitoring_on'],self.runner))
+            r_ = self._init_monitor()
 
         if any(unsynced_variables.values()):
             self._save_settings()
@@ -234,6 +251,7 @@ class PrintFarmPro:
 
 
     async def _add_monitor(self):
+        print('SELF AIO: {}'.format(self.aio))
         result = self._init_monitor()
         if result:
             return {'status' : 8000}
