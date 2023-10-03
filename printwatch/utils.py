@@ -407,7 +407,7 @@ class LoopHandler:
         - Boolean - Whether retrigger has latched
         '''
         if not self.retrigger_valid:
-            num_below_threshold = [True if ele < self.settings.get("thresholds", {}).get("notification", 0.3) else False for ele in self._buffer].count(True)
+            num_below_threshold = [True if ele[1] < self.settings.get("thresholds", {}).get("notification", 0.3) else False for ele in self._buffer].count(True)
             if num_below_threshold >= int(self.settings.get("buffer_length") * self.settings.get("buffer_percent")):
                 self.retrigger_valid = True
                 return True
@@ -464,15 +464,12 @@ class LoopHandler:
         '''
         Runs one loop of the cycle. This method is a callback for the asynchronous loop
         '''
-
         try:
             # Add conditional for checking whether print state
             duet_state = await self.rep_rap_api._get_state('/rr_status')
             if self.rep_rap_api.parse_state_response(duet_state) == 'P' or self.settings.get("test_mode"):
                 frame = self.camera.snap_sync()
                 if not isinstance(frame, bool):
-
-
                     # Get the DUET print state here
                     #print_stats = {}
                     #if self.settings.get("test_mode") and not self.rep_rap_api.parse_state_response(duet_state) == 'P':
@@ -509,7 +506,6 @@ class LoopHandler:
 
 
 
-
 class Scheduler:
     def __init__(
             self,
@@ -523,7 +519,6 @@ class Scheduler:
         '''
 
         self._interval = interval
-        self.task = asyncio.ensure_future(self._run_loop())
         self._run = True
         self._callback = None
         if loop_handler is not None:
@@ -531,6 +526,8 @@ class Scheduler:
         else:
             self._callback = callback
         self._loop_handler = loop_handler
+        self.task = asyncio.ensure_future(self._run_loop())
+        print('task created: {}'.format(self.task))
 
     async def _run_loop(self):
         '''
