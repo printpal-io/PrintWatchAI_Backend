@@ -97,6 +97,8 @@ sudo usermod -a -G video ustreamer
 sudo systemctl enable /home/pi/PrintWatchAI_Backend-raspberrypi/ustreamer.service
 sudo systemctl start ustreamer.service
 ```
+
+Once the uStreamer is installed and enabled, use the snapshot URL: `http://<raspberrypi-ip>:8080/snapshot` for the `Webcam URL` setting. Verify the URL by entering it into your browser and having a static image returned.
 ### Orange Pi
 1. SSH into the Orange Pi and navigate to the root directory of the user
 ```
