@@ -31,13 +31,16 @@ DUET_STATES = {
 }
 
 async def test_url(camera_ip : str):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(camera_ip,
-                        timeout=aiohttp.ClientTimeout(total=5.0)
-                    ) as response:
-                    if response.status == 200:
-                        if response.headers.get("content-type") == "image/jpeg":
-                            return {'status' : 8000, 'response' : 'Image type response'}
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(camera_ip,
+                            timeout=aiohttp.ClientTimeout(total=5.0)
+                        ) as response:
+                            if response.status == 200:
+                                if response.headers.get("content-type") == "image/jpeg":
+                                    return {'status' : 8000, 'response' : 'Image type response'}
+    except Exception as e:
+        {'status' : 8001, 'response' : str(e)}
     return {'status' : 8001, 'response' : 'Not image type response or error'}
 
 def get_camera_struct(request) -> list:
