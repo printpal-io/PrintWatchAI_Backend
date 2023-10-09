@@ -30,6 +30,16 @@ DUET_STATES = {
     "T" : "Toolchange"
 }
 
+async def test_url(camera_ip : str):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(camera_ip,
+                        timeout=aiohttp.ClientTimeout(total=5.0)
+                    ) as response:
+                    if response.status == 200:
+                        if response.headers.get("content-type") == "image/jpeg":
+                            return {'status' : 8000, 'response' : 'Image type response'}
+    return {'status' : 8001, 'response' : 'Not image type response or error'}
+
 def get_camera_struct(request) -> list:
     '''
     Returns the cameraStructure from a request
@@ -113,48 +123,31 @@ class RepRapAPI:
     that includes logic for proxied requests
     '''
 
-    def __init__(self, url : str = ''):
-        self.url = url
+    def __init__(self, settings : dict = {}):
+        self.settings = settings
         self.uniqueId = ''
-        self.uniqueIdFromRR = False
         self._get_uid()
 
-    def set_url(self, url):
-        if self.url != url:
-            self.url = url
-            return True
-        return False
-
     def _get_uid(self):
-        if self.url != '':
+        if self.settings.get("duet_ip") != '':
             try:
-                response = requests.get("http://{}/rr_model?key=boards".format(self.url), timeout=5.0)
+                response = requests.get("http://{}/rr_model?key=boards".format(self.settings.get("duet_ip")), timeout=5.0)
                 response = response.json()
                 uniqueId = response.get("result")[0].get("uniqueId")
                 self.uniqueId = uniqueId
-                if uniqueId.strip() in [None, ""] or len(uniqueId) < 4:
-                    if len(self.uniqueId) > 10 and not self.uniqueIdFromRR:
-                        uniqueId = uuid4().hex
-                        self.uniqueId = uniqueId
-                        self.uniqueIdFromRR = False
-                else:
-                    self.uniqueIdFromRR = True
             except:
-                if len(self.uniqueId) < 10 and not self.uniqueIdFromRR:
+                if '-' not in self.uniqueId:
                     uniqueId = uuid4().hex
-                    self.uniqueIdFromRR = False
                     self.uniqueId = uniqueId
         else:
-            if len(self.uniqueId) < 10 and not self.uniqueIdFromRR:
+            if '-' not in self.uniqueId:
                 uniqueId = uuid4().hex
-                self.uniqueIdFromRR = False
                 self.uniqueId = uniqueId
 
 
     async def _get_state(
                 self,
-                endpoint : str = '',
-                status_type : int = 3
+                endpoint : str = ''
             ) -> dict:
             '''
             Gets the state of the printer from the RepRap firmware
@@ -169,10 +162,9 @@ class RepRapAPI:
             try:
                 async with aiohttp.ClientSession() as session:
                     async with session.get(
-                                    'http://{}{}?type={}'.format(
-                                                            self.url,
-                                                            endpoint,
-                                                            status_type
+                                    'http://{}{}'.format(
+                                                            self.settings.get("duet_ip"),
+                                                            endpoint
                                     ),
                                     timeout=aiohttp.ClientTimeout(total=1.0)
                                 ) as response:
@@ -197,7 +189,7 @@ class RepRapAPI:
                 async with aiohttp.ClientSession() as session:
                     async with session.get(
                                     'http://{}/rr_gcode?gcode={}'.format(
-                                                            self.url,
+                                                            self.settings.get("duet_ip"),
                                                             gcode
                                     ),
                                     timeout=aiohttp.ClientTimeout(total=10.0)
@@ -212,7 +204,27 @@ class RepRapAPI:
         return False
 
 
+async def _async_heartbeat(
+        api_client : PrintWatchClient,
+        settings : dict = {},
+        state : int = 0
+    ):
+    '''
+    Returns the heartbeat response in an asynchrnous function call
 
+    Inputs:
+    - api_client : PrintWatchClient - the client object to us for the API call
+
+    Returns:
+    - response : Flask.Response - inference response
+    '''
+    payload = api_client._create_payload(
+                            heartbeat=True,
+                            settings=settings,
+                            state=state
+                        )
+    response = await api_client._send_async('api/v2/heartbeat', payload)
+    return response
 
 async def _async_infer(
         image,
@@ -236,7 +248,6 @@ async def _async_infer(
                             scores=scores,
                             print_stats=print_stats
                         )
-
     response = await api_client._send_async('api/v2/infer', payload)
     return response
 
@@ -291,7 +302,7 @@ class LoopHandler:
         self._lastAction = 0
         self._notificationsSent = []
         self._lastNotification = 0
-        self.retrigger_valid = False
+        self.retrigger_valid = True
         self.notifyTimer = 10.0 * 60.0 # 10 minutes between notifications minimum
         self.duet_states = duet_states
         self.rep_rap_api = rep_rap_api
@@ -313,12 +324,13 @@ class LoopHandler:
         width, height = pil_img.size
 
         for i, det in enumerate(boxes):
-            det = [j / 640 for j in det]
-            x1 = det[0] * width
-            y1 = det[1] * height
-            x2 = det[2] * width
-            y2 = det[3] * height
-            process_image.rectangle([(x1, y1), (x2, y2)], fill=None, outline="red", width=4)
+            if det[4] >= self.settings.get("thresholds", {}).get("notification"):
+                det = [j / 640 for j in det]
+                x1 = det[0] * width
+                y1 = det[1] * height
+                x2 = det[2] * width
+                y2 = det[3] * height
+                process_image.rectangle([(x1, y1), (x2, y2)], fill=None, outline="red", width=4)
 
         out_img = BytesIO()
         pil_img.save(out_img, format='PNG')
@@ -345,6 +357,42 @@ class LoopHandler:
 
         while len(self._scores) > self.settings.get("buffer_length") * self.MULTIPLIER:
             self._scores.pop(0)
+
+        self.settings["current_sma"] = smas[0]
+
+    def _check_action(self, response : dict) -> None:
+        action = response.get('action')
+        if action == 'pause':
+            # Send pause command to printer
+            '''
+            while not ((self.plugin._printer.is_pausing() and self.plugin._printer.is_printing()) or self.plugin._printer.is_paused()):
+                self.plugin._printer.pause_print()
+            '''
+        elif action == 'cancel':
+            # cancel current print
+            '''
+            while not (self.plugin._printer.is_cancelling() and self.plugin._printer.is_printing()):
+                self.plugin._printer.cancel_print()
+            '''
+        elif action == 'resume':
+            # resume current print
+            '''
+            if self.plugin._printer.is_paused():
+                while not self.plugin._printer.is_printing():
+                    self.plugin._printer.resume_print()
+            '''
+        if response.get('settings') not in [None, False]:
+            self.settings["thresholds"]["display"] = response.get('settings').get('detection_threshold') / 100.
+
+            self.settings['buffer_length'] = response.get('settings').get('buffer_length')
+            self.settings['thresholds']['notification'] = response.get('settings').get('notification_threshold') / 100.
+            self.settings['thresholds']['action'] = response.get('settings').get('action_threshold') / 100.
+            self.settings['actions']["notify"] = response.get('settings').get('enable_notification')
+            self.settings['email_addr'] = response.get('settings').get('email_address')
+            self.settings['actions']['pause'] = response.get('settings').get('pause_print')
+            self.settings['actions']['cancel'] = response.get('settings').get('cancel_print')
+            self.settings['actions']['extruder_off'] = response.get('settings').get('extruder_heat_off')
+            self.settings["require_sync"] = True
 
 
 
@@ -410,8 +458,6 @@ class LoopHandler:
             num_below_threshold = [True if ele[1] < self.settings.get("thresholds", {}).get("notification", 0.3) else False for ele in self._buffer].count(True)
             if num_below_threshold >= int(self.settings.get("buffer_length") * self.settings.get("buffer_percent")):
                 self.retrigger_valid = True
-                return True
-            return self.retrigger_valid
         return self.retrigger_valid
 
 
@@ -430,7 +476,7 @@ class LoopHandler:
             if self.settings.get("actions", {}).get("pause", False) or self.settings.get("actions", {}).get("cancel", False):
                 print("SENDING ACTION")
                 # Take the pause action if enabled
-                r = await self.rep_rap_api._pause_print(gcode = 'm25')
+                r = await self.rep_rap_api._pause_print(gcode = self.settings.get("pause_gcode"))
 
                 response = await _async_notify(
                                         api_client=self._api_client,
@@ -467,19 +513,35 @@ class LoopHandler:
         try:
             # Add conditional for checking whether print state
             duet_state = await self.rep_rap_api._get_state('/rr_status')
-            if self.rep_rap_api.parse_state_response(duet_state) == 'P' or self.settings.get("test_mode"):
+            sr_ = self.rep_rap_api.parse_state_response(duet_state) == 'P'
+            if sr_ or self.settings.get("test_mode"):
                 frame = self.camera.snap_sync()
                 if not isinstance(frame, bool):
                     # Get the DUET print state here
                     #print_stats = {}
-                    #if self.settings.get("test_mode") and not self.rep_rap_api.parse_state_response(duet_state) == 'P':
-                    print_stats = {
-                        "state" : 0,
-                        "printTime" : 550,
-                        "printTimeLeft" : 1,
-                        "progress" : 99.9,
-                        "job_name" : "temp-job-name.stl"
-                    }
+                    if sr_:
+                        job_state_ = await self.rep_rap_api._get_state('/rr_model?key=job')
+                        if isinstance(job_state_, dict):
+                            job_name_ = job_state_.get("result", {}).get("file", {}).get("fileName", 'temp-job-name.stl')
+                        else:
+                            job_name_ = 'temp-job-name.stl'
+                        t_ = duet_state.get("time", 550)
+                        tl_ = duet_state.get("timesLeft", {}).get("file", 100)
+                        print_stats = {
+                            "state" : 0,
+                            "printTime" : t_,
+                            "printTimeLeft" : tl_,
+                            "progress" : float(t_/(tl_ + t_)),
+                            "job_name" : job_name_
+                        }
+                    else:
+                        print_stats = {
+                            "state" : 0,
+                            "printTime" : 550,
+                            "printTimeLeft" : 1,
+                            "progress" : 99.9,
+                            "job_name" : "temp-job-name.stl"
+                        }
 
                     response = await _async_infer(
                                         image=b64encode(frame).decode('utf8'),
@@ -494,16 +556,17 @@ class LoopHandler:
                                     smas=response.get("smas")[0],
                                     levels=response.get("levels")
                             )
+                        self._check_action(response)
                         await self._handle_action()
                     else:
                         print('Response code not 200: {}'.format(response))
                 else:
                     print("Issue with camera")
+
         except Exception as e:
             print("Exception as e: {}".format(str(e)))
         except Exception as e:
             print("Error running once: {}".format(str(e)))
-
 
 
 class Scheduler:

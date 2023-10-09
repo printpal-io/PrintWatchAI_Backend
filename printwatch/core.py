@@ -1,7 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from .client import *
-from .utils import *
+from .utils import LoopHandler, Scheduler, _async_heartbeat, RepRapAPI, test_url
 from .interface import *
 import asyncio
 import ujson
@@ -36,6 +36,7 @@ class Settings(BaseModel):
     cancel_action : Optional[bool] = None
     notify_action : Optional[bool] = None
     extruder_off_action : Optional[bool] = None
+    pause_gcode : Optional[str] = None
 
 
 def get_or_create_eventloop():
@@ -59,15 +60,14 @@ class PrintFarmPro:
         Load settings, create API endpoints, and begin the program.
 
         '''
-        self.rep_rap_api = RepRapAPI()
         self.runner = None
+        self.printwatch = None
+        self.rep_rap_api = None
         self._load_settings()
-        self.printwatch = PrintWatchClient(settings=self.settings)
         self.aio = get_or_create_eventloop()
 
         if self.settings.get("monitoring_on"):
             self._init_monitor()
-        print('Running forever')
 
 
         self.router = APIRouter()
@@ -78,6 +78,7 @@ class PrintFarmPro:
         self.router.add_api_route('/machine/printwatch/monitor_init', self._add_monitor, methods=["GET"])
         self.router.add_api_route('/machine/printwatch/monitor_off', self._kill_monitor, methods=["GET"])
         self.router.add_api_route('/machine/printwatch/heartbeat', self._heartbeat, methods=["GET"])
+        self.router.add_api_route('/machine/printwatch/test_url', self._test_url, methods=["GET"])
         self._init_api(self.aio)
 
         #self.aio = get_or_create_eventloop()
@@ -96,12 +97,26 @@ class PrintFarmPro:
         cfg = uvicorn.Config(self.app, loop=loop, host='0.0.0.0', port=8989)
         server = uvicorn.Server(cfg)
         loop.run_until_complete(server.serve())
-        #uvicorn.run(self.app, host='0.0.0.0', port=8989)
-        print("API started")
 
 
     def _on_settings_change(self):
-        if True:
+        if self.printwatch is None:
+            self.printwatch = PrintWatchClient(settings=self.settings)
+        settings_ = {
+                    'detection_threshold' : int(self.settings.get("thresholds", {}).get("display", 0.6) * 100),
+                    'buffer_length' : int(self.settings.get("buffer_length")),
+                    'notification_threshold' : int(self.settings.get("thresholds", {}).get("notification", .30) * 100),
+                    'action_threshold' : int(self.settings.get("thresholds", {}).get("action", .60) * 100),
+                    'enable_notification' : self.settings.get("actions", {}).get("notify", False),
+                    'email_address' : self.settings.get("email_addr"),
+                    'pause_print' : self.settings.get("actions", {}).get("pause", False),
+                    'cancel_print' : self.settings.get("actions", {}).get("cancel", False),
+                    'extruder_heat_off' : self.settings.get("actions", {}).get("extruder_off", False),
+                    'enable_feedback_images' : True
+                }
+        asyncio.ensure_future(_async_heartbeat(api_client=self.printwatch, settings=settings_))
+
+        if self.settings.get("printer_id", "") == "" or (self.settings.get("duet_ip") != "" and '-' not in self.rep_rap_api.uniqueId):
             self.rep_rap_api._get_uid()
             self.settings["printer_id"] = self.rep_rap_api.uniqueId
         if self.runner is not None:
@@ -135,13 +150,18 @@ class PrintFarmPro:
                     "notify" : False,
                     "extruder_off" : False,
                     "macro" : False
-                }
+                },
+                "current_sma" : 0.0,
+                "require_sync" : 0, # Enum value, {0 : no sync required, 1 : backend has correct value, 2: frontend has correct}
+                "pause_gcode" : ""
             }
+            self.rep_rap_api = RepRapAPI(settings=self.settings)
             self._on_settings_change()
             self._save_settings()
         else:
             with open("settings.json", "r") as f:
                 self.settings = ujson.load(f)
+            self.rep_rap_api = RepRapAPI(settings=self.settings)
             self._on_settings_change()
 
 
@@ -180,6 +200,10 @@ class PrintFarmPro:
                     }
                 }
 
+    async def _test_url(self):
+        r_ = await test_url(self.settings.get("camera_ip"))
+        return r_
+
     async def _get_preview(self):
         if self.runner is None:
             return {'status' : 8001, 'response' : 'No monitor active'}
@@ -191,31 +215,32 @@ class PrintFarmPro:
                     }
                 }
 
-    async def _heartbeat(self, api_key : str, test_mode : bool, enable_monitor : bool, duet_ip : str):
+    async def _heartbeat(self, api_key : Union[str, None] = None, test_mode : Union[bool, None] = None, enable_monitor : Union[bool, None] = None, duet_ip : Union[str, None] = None):
         unsynced_variables = {
             'duet_ip' : False,
             'api_key' : False,
             'test_mode' : False,
             'monitoring_on' : False
         }
-        if self.settings['duet_ip'] != duet_ip:
+        if self.settings.get("require_sync", 0) == 1:
+            self.settings["require_sync"] = 0
+            return {'status' : 8002, 'settings' : self.settings}
+        if self.settings['duet_ip'] != duet_ip and duet_ip not in ['', None]:
             unsynced_variables['duet_ip'] = True
             self.settings['duet_ip'] = duet_ip
-        if self.settings['api_key'] != api_key:
+        if self.settings['api_key'] != api_key and api_key not in ['', None]:
             unsynced_variables['api_key'] = True
             self.settings['api_key'] = api_key
-        if self.settings['monitoring_on'] != enable_monitor:
+        if self.settings['monitoring_on'] != enable_monitor and enable_monitor is not None:
             unsynced_variables["monitoring_on"] = True
             self.settings['monitoring_on'] = enable_monitor
             if self.setting["monitoring_on"] is False:
                 self._kill_runner()
-        if self.settings['test_mode'] != test_mode:
+        if self.settings['test_mode'] != test_mode and test_mode is not None:
             unsynced_variables["test_mode"] = True
             self.settings["test_mode"] = test_mode
 
-        print("MONITORING ON: {} | {} ".format(self.settings["monitoring_on"], self.runner))
         if self.settings['monitoring_on'] and self.runner is None:
-            print("MONITOR IS NONE: {} | {}".format(self.settings['monitoring_on'],self.runner))
             r_ = self._init_monitor()
 
         if any(unsynced_variables.values()):
@@ -230,16 +255,18 @@ class PrintFarmPro:
         for key, value in settings.__dict__.items():
             if value is not None:
                 if key == 'notification_threshold':
-                    self.settings['thresholds']['notification'] = value if value < 1.0 else value / 100.
+                    if value not in [0.0, 0]:
+                        self.settings['thresholds']['notification'] = value if value < 1.0 else value / 100.
                 elif key == 'action_threshold':
-                    self.settings['thresholds']['action'] = value if value < 1.0 else value / 100.
+                    if value not in [0.0, 0]:
+                        self.settings['thresholds']['action'] = value if value < 1.0 else value / 100.
                 elif key == 'notify_action':
                     self.settings['actions']['notify'] = value
                 elif key == 'pause_action':
                     self.settings['actions']['pause'] = value
                 elif key == 'duet_ip':
-                    self.rep_rap_api.set_url(value)
-                    self.settings[key] = value
+                    if value not in ['', None]:
+                        self.settings[key] = value
                 else:
                     self.settings[key] = value
         self._save_settings()
@@ -251,7 +278,6 @@ class PrintFarmPro:
 
 
     async def _add_monitor(self):
-        print('SELF AIO: {}'.format(self.aio))
         result = self._init_monitor()
         if result:
             return {'status' : 8000}

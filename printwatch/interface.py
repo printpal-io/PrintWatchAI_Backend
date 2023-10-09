@@ -30,8 +30,9 @@ class MJPEG:
                             self.byte_frame = await response.read()
                             return self.byte_frame
 
-        return False
         self.pil_image = Image.open(BytesIO(self.byte_frame))
+        return False
+
     def snap_sync(self):
         r = requests.get(self.ip)
         if r.status_code == 200:
