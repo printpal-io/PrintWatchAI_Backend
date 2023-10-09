@@ -90,11 +90,15 @@ sudo make install
 6. Make uStreamer user
 ```
 sudo useradd -r ustreamer
+```
+```
 sudo usermod -a -G video ustreamer
 ```
 7. Enable and start the systemctl process for uStreamer
 ```
 sudo systemctl enable /home/pi/PrintWatchAI_Backend-raspberrypi/ustreamer.service
+```
+```
 sudo systemctl start ustreamer.service
 ```
 
