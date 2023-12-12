@@ -234,7 +234,7 @@ class PrintFarmPro:
         if self.settings['monitoring_on'] != enable_monitor and enable_monitor is not None:
             unsynced_variables["monitoring_on"] = True
             self.settings['monitoring_on'] = enable_monitor
-            if self.setting["monitoring_on"] is False:
+            if self.settings["monitoring_on"] is False:
                 self._kill_runner()
         if self.settings['test_mode'] != test_mode and test_mode is not None:
             unsynced_variables["test_mode"] = True
