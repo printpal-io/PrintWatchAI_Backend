@@ -19,6 +19,7 @@ origins = [
     "http://localhost:8989",
 ]
 
+
 class Settings(BaseModel):
     api_key : Optional[str] = None
     printer_id : Optional[str] = None
@@ -153,7 +154,10 @@ class PrintFarmPro:
                 },
                 "current_sma" : 0.0,
                 "require_sync" : 0, # Enum value, {0 : no sync required, 1 : backend has correct value, 2: frontend has correct}
-                "pause_gcode" : ""
+                "pause_gcode" : "",
+                "cancel_gcode" : "",
+                "resume_gcode" : "",
+                "rotation" : 0
             }
             self.rep_rap_api = RepRapAPI(settings=self.settings)
             self._on_settings_change()
